@@ -43,6 +43,10 @@ app.get("/todo/:id", async (req, res) => {
     , [
      id,
     ]);
+
+    if (rows.length == 0) {
+        res.status(404).send("not found");
+      }
     
     res.json(rows[0]);
   });
