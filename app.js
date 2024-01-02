@@ -92,6 +92,55 @@ app.post("/todo", async (req, res) => {
     });
   });
   
+
+  // 할일 수정
+app.patch("/todo/:id", async (req, res) => {
+
+    const { id } = req.params;
+
+    const { contents, completed } = req.body;
+
+    const [rows] = await pool.query("SELECT * FROM Todo WHERE id = ?", [id]);
+
+      if (rows.length == 0) {
+        res.status(404).send("not found");
+        return;
+      }
+    
+  
+    if (!contents) {
+      res.status(400).json({
+        msg: "contents required",
+      });
+      return;
+    }
+
+    if (typeof completed === 'undefined') {
+        res.status(400).json({
+            msg: "completed required",
+        });
+        return;
+    }
+
+  
+    const [rs] = await pool.query(
+      ` 
+      UPDATE Todo
+      SET 
+      contents = ?,
+      completed = ?
+      WHERE id = ? 
+      `,
+      [contents, completed , id]
+    );
+  
+    res.status(200).json({
+      id,
+      contents,
+      completed
+    });
+  });
+  
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 })
