@@ -27,7 +27,7 @@ const Todo = [
 ]
 
 app.get('/', (req, res) => {
-  res.send('Hello World!!!')
+  res.send(Todo)
 });
 
 app.get("/todo", async (req, res) => {
@@ -36,6 +36,16 @@ app.get("/todo", async (req, res) => {
   res.json(rows);
 });
 
+
+app.get("/todo/:id", async (req, res) => {
+    const { id } = req.params;
+    const [rows] = await pool.query("SELECT * FROM Todo WHERE id = ?"
+    , [
+     id,
+    ]);
+    
+    res.json(rows[0]);
+  });
 
 
 
