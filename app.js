@@ -36,7 +36,7 @@ app.get("/todo", async (req, res) => {
   res.json(rows);
 });
 
-
+// id에 맞는 하나의 데이터만 get 요청
 app.get("/todo/:id", async (req, res) => {
     const { id } = req.params;
     const [rows] = await pool.query("SELECT * FROM Todo WHERE id = ?"
@@ -52,8 +52,46 @@ app.get("/todo/:id", async (req, res) => {
     res.json(rows[0]);
   });
 
+// 할일 등록
+app.post("/todo", async (req, res) => {
+    const { member_id, contents, completed } = req.body;
+  
+    if (!member_id) {
+      res.status(400).json({
+        msg: "memberID required",
+      });
+      return;
+    }
+  
+    if (!contents) {
+      res.status(400).json({
+        msg: "contents required",
+      });
+      return;
+    }
 
-
+    if (!completed) {
+        res.status(400).json({
+          msg: "completed required",
+        });
+        return;
+      }
+  
+    const [rs] = await pool.query(
+      `
+      INSERT INTO Todo
+      SET member_id = ?,
+      contents = ?,
+      completed = ?
+      `,
+      [member_id, contents, completed]
+    );
+  
+    res.status(201).json({
+      id: rs.insertId,
+    });
+  });
+  
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 })
