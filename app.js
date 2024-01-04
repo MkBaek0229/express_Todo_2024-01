@@ -9,165 +9,154 @@ const pool = mysql2.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+  dateStrings: true
 });
 
 const app = express()
 app.use(express.json());
 const port = 3000
 
-const Todo = [
-  {
-    content:"하루밥 5끼먹기",
-    completed:false,
-  },
-  {
-    content:"하루종일 누워있기",
-    completed:false,
-  }
-]
-
-app.get('/', (req, res) => {
-  res.send(Todo)
-});
-
-app.get("/todo", async (req, res) => {
+// 다건조회
+app.get("/todos", async (req, res) => {
   const [rows] = await pool.query("SELECT * FROM Todo ORDER BY id DESC");
-
-  res.json(rows);
+  res.json({
+    resultCode: "S-1",
+    msg: "성공",
+    data: rows,
+  });
 });
 
-// id에 맞는 하나의 데이터만 get 요청
-app.get("/todo/:id", async (req, res) => {
-    const { id } = req.params;
-    const [rows] = await pool.query("SELECT * FROM Todo WHERE id = ?"
-    , [
-     id,
-    ]);
+// 단건조회
+app.get("/:id/todos", async (req, res) => {
+  const { id } = req.params;
+  const [rows] = await pool.query("SELECT * FROM Todo WHERE id = ?", [id]);
 
-    if (rows.length == 0) {
-        res.status(404).send("not found");
-        return;
-      }
-    
-    res.json(rows[0]);
-  });
-
-// 할일 등록
-app.post("/todo", async (req, res) => {
-    const { member_id, contents, completed } = req.body;
-  
-    if (!member_id) {
-      res.status(400).json({
-        msg: "memberID required",
-      });
-      return;
-    }
-  
-    if (!contents) {
-      res.status(400).json({
-        msg: "contents required",
-      });
-      return;
-    }
-
-    if (!completed) {
-        res.status(400).json({
-          msg: "completed required",
-        });
-        return;
-      }
-  
-    const [rs] = await pool.query(
-      `
-      INSERT INTO Todo
-      SET member_id = ?,
-      contents = ?,
-      completed = ?
-      `,
-      [member_id, contents, completed]
-    );
-  
-    res.status(201).json({
-      id: rs.insertId,
+  if (rows.length == 0) {
+    res.status(404).json
+    ({
+      resultCode: "F-1",
+      msg: "실패",
     });
-  });
-  
-
-  // 할일 수정
-app.patch("/todo/:id", async (req, res) => {
-
-    const { id } = req.params;
-
-    const { contents, completed } = req.body;
-
-    const [rows] = await pool.query("SELECT * FROM Todo WHERE id = ?", [id]);
-
-      if (rows.length == 0) {
-        res.status(404).send("not found");
-        return;
-      }
     
-  
-    if (!contents) {
-      res.status(400).json({
-        msg: "contents required",
-      });
-      return;
-    }
+    return;
+  }
 
-    if (typeof completed === 'undefined') {
-        res.status(400).json({
-            msg: "completed required",
-        });
-        return;
-    }
-
-  
-    const [rs] = await pool.query(
-      ` 
-      UPDATE Todo
-      SET 
-      contents = ?,
-      completed = ?
-      WHERE id = ? 
-      `,
-      [contents, completed , id]
-    );
-  
-    res.status(200).json({
-      id,
-      contents,
-      completed
-    });
+  res.json({
+    resultCode: "S-1",
+    msg: "성공",
+    data: rows,
   });
-  
+});
 
-  // 할일 삭제
-  app.delete("/todo/:id", async (req, res) => {
+//생성
+app.post("/todos", async (req, res) => {
+  const { contents, completed } = req.body;
 
-    const { id } = req.params;
-
-   
-    const [rows] = await pool.query("SELECT * FROM Todo WHERE id = ?", [id]);
-
-      if (rows.length == 0) {
-        res.status(404).send("not found");
-        return;
-      }
-    
-  
-    const [rs] = await pool.query(
-      ` 
-      DELETE FROM Todo
-      WHERE id = ? 
-      `,
-      [id]
-    );
-  
-    res.status(200).json({
-      id
+  if (!contents) {
+    res.status(400).json({
+      msg: "contents required",
     });
+    return;
+  }
+
+  if (typeof completed === 'undefined') {
+    res.status(400).json({
+      resultCode: "F-1",
+      msg: "실패",
+    });
+    return;
+  }
+
+  const [rs] = await pool.query(
+    `
+    INSERT INTO Todo
+    SET contents = ?,
+    completed = ?
+    `,
+    [contents, completed]
+  );
+
+  res.status(201).json({
+    resultCode: "S-1",
+    msg: "성공",
+    data: rows,
   });
+});
+
+//수정
+app.patch("/:id/todos", async (req, res) => {
+  const { id } = req.params;
+  const { contents, completed } = req.body;
+
+  const [rows] = await pool.query("SELECT * FROM Todo WHERE id = ?", [id]);
+
+  if (rows.length == 0) {
+    res.status(404).send("not found");
+    return;
+  }
+
+  if (!contents) {
+    res.status(400).json({
+      resultCode: "F-1",
+      msg: "실패",
+    });
+    return;
+  }
+
+  if (typeof completed === 'undefined') {
+    res.status(400).json({
+      resultCode: "F-1",
+      msg: "실패",
+    });
+    return;
+  }
+
+  const [rs] = await pool.query(
+    ` 
+    UPDATE Todo
+    SET 
+    contents = ?,
+    completed = ?
+    WHERE id = ? 
+    `,
+    [contents, completed, id]
+  );
+
+  res.status(201).json({
+    resultCode: "S-1",
+    msg: "성공",
+    data: rows,
+  });
+});
+
+//삭제
+app.delete("/:id/todo", async (req, res) => {
+  const { id } = req.params;
+
+  const [rows] = await pool.query("SELECT * FROM Todo WHERE id = ?", [id]);
+
+  if (rows.length == 0) {
+    rres.status(400).json({
+      resultCode: "F-1",
+      msg: "실패",
+    });
+    return;
+  }
+
+  const [rs] = await pool.query(
+    ` 
+    DELETE FROM Todo
+    WHERE id = ? 
+    `,
+    [id]
+  );
+
+  res.status(200).json({
+    resultCode: "F-1",
+    msg: `${id}번 할일을 삭제하였습니다`,
+  });
+});
+
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 })
