@@ -20,7 +20,7 @@ const port = 3000
 app.get("/:username/todos", async (req, res) => {
   const {username} = req.params;
 
-  const [rows] = await pool.query(
+  const [todosrows] = await pool.query(
   `
   SELECT member.name AS 회원이름, todo.contents AS 할일내역
   FROM member
@@ -30,15 +30,25 @@ app.get("/:username/todos", async (req, res) => {
   `,
   [username]
   );
+// 데이터 요청이 올바르게 되지 않았을시에 실패 메시지 반환
+  if (todosrows.length == 0) {
+    res.status(404).json
+    ({
+      resultCode: "F-1",
+      msg: "해당 회원이 존재하지 않거나 올바르게 작성되지않았습니다.",
+    });
+    return;
+  }
+
   res.json({
     resultCode: "S-1",
     msg: "성공",
-    data: rows,
+    data: todosrows,
   });
 });
 
 // 단건조회
-app.get("/:id/todos", async (req, res) => {
+app.get("/:username/todos/:no", async (req, res) => {
   const { id } = req.params;
   const [rows] = await pool.query("SELECT * FROM Todo WHERE id = ?", [id]);
 
