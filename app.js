@@ -1,11 +1,11 @@
 import express from 'express';
-import mysql2 from "mysql2/promise";
+import mysql from "mysql2/promise";
 
-const pool = mysql2.createPool({
+const pool = mysql.createPool({
   host: "localhost",
   user: "alsrl6678",
   password: "alsrl1004",
-  database: "TodoService",
+  database: "todo",
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -16,9 +16,20 @@ const app = express()
 app.use(express.json());
 const port = 3000
 
-// 다건조회
-app.get("/todos", async (req, res) => {
-  const [rows] = await pool.query("SELECT * FROM Todo ORDER BY id DESC");
+// 유저가 작성한 데이터 조회
+app.get("/:username/todos", async (req, res) => {
+  const {username} = req.params;
+
+  const [rows] = await pool.query(
+  `
+  SELECT member.name AS 회원이름, todo.contents AS 할일내역
+  FROM member
+  JOIN todo_member ON member.id = todo_member.member_id
+  JOIN todo ON todo_member.todo_id = todo.id
+  WHERE member.name = ?
+  `,
+  [username]
+  );
   res.json({
     resultCode: "S-1",
     msg: "성공",
