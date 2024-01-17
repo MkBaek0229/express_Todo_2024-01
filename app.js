@@ -1,4 +1,5 @@
 import express from 'express';
+import cors  from 'cors';
 import mysql from "mysql2/promise";
 
 const pool = mysql.createPool({
@@ -13,11 +14,11 @@ const pool = mysql.createPool({
 });
 
 const app = express()
-app.use(cors(corsOptions));
+app.use(cors());
 app.use(express.json());
 const port = 3000
 
-// 유저가 작성한 데이터 조회
+// 할일 조회 API
 app.get("/:username/todos", async (req, res) => {
   const {username} = req.params;
 
@@ -48,7 +49,7 @@ app.get("/:username/todos", async (req, res) => {
   });
 });
 
-// 단건조회
+// 단건조회 API
 app.get("/:username/todos/:no", async (req, res) => {
   const { username , no} = req.params;
   const [todorows] = await pool.query(
@@ -80,40 +81,70 @@ app.get("/:username/todos/:no", async (req, res) => {
   });
 });
 
-//생성
+// 할일 생성 API
 app.post("/:username/todos/", async (req, res) => {
-  const { contents, completed } = req.body;
+  const { username } = req.params;
+  const { contents, completed = 0 } = req.body;
 
+  // 할일 내용이 없는 경우 실패 응답
   if (!contents) {
     res.status(400).json({
-      msg: "contents required",
-    });
-    return;
-  }
-
-  if (typeof completed === 'undefined') {
-    res.status(400).json({
       resultCode: "F-1",
-      msg: "실패",
+      msg: "할일내용을 작성해주세요",
     });
     return;
   }
 
-  const [rs] = await pool.query(
-    `
-    INSERT INTO Todo
-    SET contents = ?,
-    completed = ?
-    `,
-    [contents, completed]
-  );
+  try {
+    // 데이터 생성: todo 테이블에 새로운 할일 추가
+    const [insertTodoRs] = await pool.query(
+      `
+      INSERT INTO todo (contents, completed) VALUES (?, ?);
+      `,
+      [contents, completed]
+    );
 
-  res.status(201).json({
-    resultCode: "S-1",
-    msg: "성공",
-    data: rows,
-  });
+    // 새로 생성된 할일의 ID
+    const todoId = insertTodoRs.insertId;
+
+    // 할일과 회원 매핑: todo_member 테이블에 새로운 할일과 회원의 매핑 정보 추가
+    await pool.query(
+      `
+      INSERT INTO todo_member (member_id, todo_id) VALUES (
+        (SELECT id FROM member WHERE name = ?),
+        ?
+      );
+      `,
+      [username, todoId]
+    );
+
+    // 생성된 할일 정보 조회
+    const [[justCreatedTodoRow]] = await pool.query(
+      `
+      SELECT *
+      FROM todo
+      WHERE id = ?
+      `,
+      [todoId]
+    );
+
+    // 성공 응답
+    res.json({
+      resultCode: "S-1",
+      msg: `${justCreatedTodoRow.id}번 할일을 생성하였습니다`,
+      data: justCreatedTodoRow,
+    });
+  } catch (error) {
+    console.error("에러 발생:", error);
+
+    // 실패 응답
+    res.status(500).json({
+      resultCode: "F-1",
+      msg: "서버 에러",
+    });
+  }
 });
+
 
 //수정
 app.patch("/:id/todos", async (req, res) => {
