@@ -146,53 +146,85 @@ app.post("/:username/todos/", async (req, res) => {
 });
 
 
-//수정
-app.patch("/:id/todos", async (req, res) => {
-  const { id } = req.params;
+
+
+   // 할일 수정 API
+app.patch("/:username/todos/:no", async (req, res) => {
+  const { username, no } = req.params;
   const { contents, completed } = req.body;
 
-  const [rows] = await pool.query("SELECT * FROM Todo WHERE id = ?", [id]);
+  try {
+    // 해당 회원이 작성한 특정 번호의 할일을 조회
+    const [rows] = await pool.query(
+      `
+      SELECT todo.id
+      FROM member
+      JOIN todo_member ON member.id = todo_member.member_id
+      JOIN todo ON todo_member.todo_id = todo.id
+      WHERE member.name = ?
+        AND todo.id = ?
+      `,
+      [username, no]
+    );
 
-  if (rows.length == 0) {
-    res.status(404).send("not found");
-    return;
-  }
+    if (rows.length === 0) {
+      res.status(404).json({
+        resultCode: "F-1",
+        msg: "해당 회원이 작성한 해당 번호의 할일이 존재하지 않습니다",
+      });
+      return;
+    }
 
-  if (!contents) {
-    res.status(400).json({
-      resultCode: "F-1",
-      msg: "실패",
+    // 할일 내용이 없는 경우 실패 응답
+    if (!contents) {
+      res.status(400).json({
+        resultCode: "F-1",
+        msg: "할일 내용을 작성해주세요",
+      });
+      return;
+    }
+
+    // 완료 여부가 정의되지 않은 경우 실패 응답
+    if (typeof completed === 'undefined') {
+      res.status(400).json({
+        resultCode: "F-1",
+        msg: "완료 여부를 지정해주세요",
+      });
+      return;
+    }
+
+    // 할일 수정 쿼리 실행
+    const [rs] = await pool.query(
+      ` 
+      UPDATE todo
+      SET 
+      contents = ?,
+      completed = ?
+      WHERE id = ? 
+      `,
+      [contents, completed, no]
+    );
+
+    res.status(201).json({
+      resultCode: "S-1",
+      msg: "할일을 수정하였습니다",
+      data: rs,
     });
-    return;
-  }
+  } catch (error) {
+    console.error("에러 발생:", error);
 
-  if (typeof completed === 'undefined') {
-    res.status(400).json({
+    // 실패 응답
+    res.status(500).json({
       resultCode: "F-1",
-      msg: "실패",
+      msg: "서버 에러",
     });
-    return;
   }
-
-  const [rs] = await pool.query(
-    ` 
-    UPDATE Todo
-    SET 
-    contents = ?,
-    completed = ?
-    WHERE id = ? 
-    `,
-    [contents, completed, id]
-  );
-
-  res.status(201).json({
-    resultCode: "S-1",
-    msg: "성공",
-    data: rows,
-  });
 });
 
-//삭제
+
+
+
+//할일 삭제 API
 app.delete("/:username/todos/:no", async (req, res) => {
   const { username , no} = req.params;  
 
