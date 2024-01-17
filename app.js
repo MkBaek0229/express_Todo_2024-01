@@ -161,30 +161,38 @@ app.patch("/:id/todos", async (req, res) => {
 });
 
 //삭제
-app.delete("/:id/todo", async (req, res) => {
-  const { id } = req.params;
+app.delete("/:username/todos/:no", async (req, res) => {
+  const { username , no} = req.params;  
 
-  const [rows] = await pool.query("SELECT * FROM Todo WHERE id = ?", [id]);
-
-  if (rows.length == 0) {
-    rres.status(400).json({
+  const [todorows] = await pool.query(
+    ` 
+    DELETE FROM todo
+    WHERE id = ?
+      AND id IN (
+        SELECT todo_id
+        FROM todo_member
+        WHERE member_id = (
+          SELECT id
+          FROM member
+          WHERE name = ?
+          )
+      )
+    `,
+    [no,username]
+  );
+  if (todorows.length == 0) {
+    res.status(400).json({
       resultCode: "F-1",
-      msg: "실패",
+      msg: "해당 todo는 존재하지 않습니다",
     });
     return;
   }
 
-  const [rs] = await pool.query(
-    ` 
-    DELETE FROM Todo
-    WHERE id = ? 
-    `,
-    [id]
-  );
+  
 
   res.status(200).json({
     resultCode: "F-1",
-    msg: `${id}번 할일을 삭제하였습니다`,
+    msg: `${no}번 할일을 삭제하였습니다`,
   });
 });
 
