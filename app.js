@@ -13,6 +13,7 @@ const pool = mysql.createPool({
 });
 
 const app = express()
+app.use(cors(corsOptions));
 app.use(express.json());
 const port = 3000
 
@@ -80,7 +81,7 @@ app.get("/:username/todos/:no", async (req, res) => {
 });
 
 //생성
-app.post("/todos", async (req, res) => {
+app.post("/:username/todos/", async (req, res) => {
   const { contents, completed } = req.body;
 
   if (!contents) {
