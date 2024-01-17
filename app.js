@@ -49,14 +49,24 @@ app.get("/:username/todos", async (req, res) => {
 
 // 단건조회
 app.get("/:username/todos/:no", async (req, res) => {
-  const { id } = req.params;
-  const [rows] = await pool.query("SELECT * FROM Todo WHERE id = ?", [id]);
+  const { username , no} = req.params;
+  const [todorows] = await pool.query(
+    `
+    SELECT member.name AS 회원이름, todo.contents AS 할일내역
+    FROM member
+    JOIN todo_member ON member.id = todo_member.member_id
+    JOIN todo ON todo_member.todo_id = todo.id
+    WHERE member.name = ?
+    AND todo.id = ?
+    `,
+    [username , no]
+    );
 
-  if (rows.length == 0) {
+  if (todorows.length == 0) {
     res.status(404).json
     ({
       resultCode: "F-1",
-      msg: "실패",
+      msg: "해당 번호로 작성된 todo가 없습니다.",
     });
     
     return;
@@ -65,7 +75,7 @@ app.get("/:username/todos/:no", async (req, res) => {
   res.json({
     resultCode: "S-1",
     msg: "성공",
-    data: rows,
+    data: todorows,
   });
 });
 
