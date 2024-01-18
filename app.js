@@ -18,13 +18,95 @@ app.use(cors());
 app.use(express.json());
 const port = 3000
 
+// 회원가입 API
+app.post("/signup", async (req, res) => {
+  const { username, password, callnum } = req.body;
+
+  // 필수 정보 검증
+  if (!username || !password || !callnum) {
+    res.status(400).json({
+      resultCode: "F-1",
+      msg: "사용자 이름, 비밀번호, 전화번호를 모두 입력해주세요",
+    });
+    return;
+  }
+
+  try {
+    // 사용자 등록
+    const [insertUserRs] = await pool.query(
+      `
+      INSERT INTO member (name, password, callnum) VALUES (?, ?, ?);
+      `,
+      [username, password, callnum]
+    );
+
+    res.json({
+      resultCode: "S-1",
+      msg: "회원가입이 완료되었습니다",
+      data: {
+        userId: insertUserRs.insertId,
+        username,
+      },
+    });
+  } catch (error) {
+    console.error("에러 발생:", error);
+    // 중복된 사용자 이름 또는 다른 오류에 대한 처리
+    if (error.code === 'ER_DUP_ENTRY') {
+      res.status(409).json({
+        resultCode: "F-1",
+        msg: "이미 존재하는 사용자 이름입니다",
+      });
+    } else {
+      res.status(500).json({
+        resultCode: "F-1",
+        msg: "서버 에러",
+      });
+    }
+  }
+});
+
+// 사용자 로그인 여부를 확인하는 미들웨어
+const checkLogin = async (req, res, next) => {
+  const { username } = req.params;
+
+  try {
+    // 사용자가 존재하는지 확인
+    const [userRows] = await pool.query(
+      `
+      SELECT id FROM member WHERE name = ?;
+      `,
+      [username]
+    );
+
+    if (userRows.length === 0) {
+      res.status(401).json({
+        resultCode: "F-1",
+        msg: "로그인이 필요합니다",
+      });
+      return;
+    }
+
+    next(); // 다음 미들웨어로 이동
+  } catch (error) {
+    console.error("에러 발생:", error);
+    res.status(500).json({
+      resultCode: "F-1",
+      msg: "서버 에러",
+    });
+  }
+};
+
+// 사용자 로그인 체크 미들웨어를 관련된 라우트에 적용
+app.use("/:username/todos", checkLogin);
+
+
 // 할일 조회 API
 app.get("/:username/todos", async (req, res) => {
   const {username} = req.params;
 
   const [todosrows] = await pool.query(
   `
-  SELECT member.name AS 회원이름, todo.contents AS 할일내역
+  SELECT todo.id, member.name AS 회원이름, todo.contents AS 할일내역
   FROM member
   JOIN todo_member ON member.id = todo_member.member_id
   JOIN todo ON todo_member.todo_id = todo.id
@@ -241,7 +323,7 @@ app.delete("/:username/todos/:no", async (req, res) => {
           WHERE name = ?
           )
       )
-    `,
+    `,  
     [no,username]
   );
   if (todorows.length == 0) {
