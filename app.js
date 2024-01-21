@@ -1,22 +1,38 @@
 import express from 'express';
-import cors  from 'cors';
-import mysql from "mysql2/promise";
+import cors from 'cors';
+import pkg from 'pg';
 
-const pool = mysql.createPool({
-  host: "localhost",
-  user: "alsrl6678",
-  password: "alsrl1004",
-  database: "todo",
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  dateStrings: true
+const { Pool } = pkg;
+
+const pool = new Pool({
+  user: "postgres",
+  password: "QQmIjV5pH0QXG6u",
+  host: "mktodo.internal",
+  port: 5432, // PostgreSQL 기본 포트
+  database: "postgres", 
 });
 
-const app = express()
-app.use(cors());
+const app = express();
+const corsOptions = {
+  origin: "*",
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
-const port = 3000
+
+const port = 3000;
+
+pool.connect((err) => {
+  if (err) {
+    console.error('connection error', err.stack);
+  } else {
+    console.log('connected to postgres');
+  }
+});
+
+app.get("/", (req, res) => {
+  res.send("Hello Todo World");
+});
 
 // 회원가입 API
 app.post("/signup", async (req, res) => {
@@ -33,9 +49,10 @@ app.post("/signup", async (req, res) => {
 
   try {
     // 사용자 등록
-    const [insertUserRs] = await pool.query(
+    const { rows } = await pool.query(
       `
-      INSERT INTO member (name, password, callnum) VALUES (?, ?, ?);
+      INSERT INTO member (name, password, callnum) VALUES ($1, $2, $3)
+      RETURNING id;
       `,
       [username, password, callnum]
     );
@@ -44,7 +61,7 @@ app.post("/signup", async (req, res) => {
       resultCode: "S-1",
       msg: "회원가입이 완료되었습니다",
       data: {
-        userId: insertUserRs.insertId,
+        userId: rows[0].id,
         username,
       },
     });
@@ -71,14 +88,14 @@ const checkLogin = async (req, res, next) => {
 
   try {
     // 사용자가 존재하는지 확인
-    const [userRows] = await pool.query(
+    const { rows } = await pool.query(
       `
-      SELECT id FROM member WHERE name = ?;
+      SELECT id FROM member WHERE name = $1;
       `,
       [username]
     );
 
-    if (userRows.length === 0) {
+    if (rows.length === 0) {
       res.status(401).json({
         resultCode: "F-1",
         msg: "로그인이 필요합니다",
@@ -99,68 +116,85 @@ const checkLogin = async (req, res, next) => {
 // 사용자 로그인 체크 미들웨어를 관련된 라우트에 적용
 app.use("/:username/todos", checkLogin);
 
-
 // 할일 조회 API
 app.get("/:username/todos", async (req, res) => {
-  const {username} = req.params;
+  const { username } = req.params;
 
-  const [todosrows] = await pool.query(
-  `
-  SELECT todo.id, member.name AS 회원이름, todo.contents AS 할일내역
-  FROM member
-  JOIN todo_member ON member.id = todo_member.member_id
-  JOIN todo ON todo_member.todo_id = todo.id
-  WHERE member.name = ?
-  `,
-  [username]
-  );
-// 데이터 요청이 올바르게 되지 않았을시에 실패 메시지 반환
-  if (todosrows.length == 0) {
-    res.status(404).json
-    ({
-      resultCode: "F-1",
-      msg: "해당 회원이 존재하지 않거나 올바르게 작성되지않았습니다.",
+  try {
+    const { rows } = await pool.query(
+      `
+      SELECT todo.id, member.name, todo.contents , todo.completed
+      FROM member
+      JOIN todo_member ON member.id = todo_member.member_id
+      JOIN todo ON todo_member.todo_id = todo.id
+      WHERE member.name = $1;
+      `,
+      [username]
+    );
+
+    // 데이터 요청이 올바르게 되지 않았을 시에 실패 메시지 반환
+    if (rows.length === 0) {
+      res.status(404).json
+      ({
+        resultCode: "F-1",
+        msg: "해당 회원이 존재하지 않거나 올바르게 작성되지 않았습니다.",
+      });
+      return;
+    }
+
+    res.json({
+      resultCode: "S-1",
+      msg: "성공",
+      data: rows,
     });
-    return;
+  } catch (error) {
+    console.error("에러 발생:", error);
+    res.status(500).json({
+      resultCode: "F-1",
+      msg: "서버 에러",
+    });
   }
-
-  res.json({
-    resultCode: "S-1",
-    msg: "성공",
-    data: todosrows,
-  });
 });
 
 // 단건조회 API
 app.get("/:username/todos/:no", async (req, res) => {
-  const { username , no} = req.params;
-  const [todorows] = await pool.query(
-    `
-    SELECT member.name AS 회원이름, todo.contents AS 할일내역
-    FROM member
-    JOIN todo_member ON member.id = todo_member.member_id
-    JOIN todo ON todo_member.todo_id = todo.id
-    WHERE member.name = ?
-    AND todo.id = ?
-    `,
-    [username , no]
+  const { username, no } = req.params;
+
+  try {
+    const { rows } = await pool.query(
+      `
+      SELECT member.name AS 회원이름, todo.contents AS 할일내역, todo.completed AS 진행상태
+      FROM member
+      JOIN todo_member ON member.id = todo_member.member_id
+      JOIN todo ON todo_member.todo_id = todo.id
+      WHERE member.name = $1
+      AND todo.id = $2;
+      `,
+      [username, no]
     );
 
-  if (todorows.length == 0) {
-    res.status(404).json
-    ({
-      resultCode: "F-1",
-      msg: "해당 번호로 작성된 todo가 없습니다.",
-    });
-    
-    return;
-  }
+    if (rows.length === 0) {
+      res.status(404).json
+      ({
+        resultCode: "F-1",
+        msg: "해당 번호로 작성된 todo가 없습니다.",
+      });
 
-  res.json({
-    resultCode: "S-1",
-    msg: "성공",
-    data: todorows,
-  });
+      return;
+    }
+
+    res.json({
+      resultCode: "S-1",
+      msg: "성공",
+      data: rows,
+    });
+  } catch (error) {
+    console.error("에러 발생:", error);
+    res.status(500).json({
+      resultCode: "F-1",
+      msg: "서버 에러",
+    });
+  }
 });
 
 // 할일 생성 API
@@ -179,33 +213,34 @@ app.post("/:username/todos/", async (req, res) => {
 
   try {
     // 데이터 생성: todo 테이블에 새로운 할일 추가
-    const [insertTodoRs] = await pool.query(
+    const { rows } = await pool.query(
       `
-      INSERT INTO todo (contents, completed) VALUES (?, ?);
+      INSERT INTO todo (contents, completed) VALUES ($1, $2)
+      RETURNING id;
       `,
       [contents, completed]
     );
 
     // 새로 생성된 할일의 ID
-    const todoId = insertTodoRs.insertId;
+    const todoId = rows[0].id;
 
     // 할일과 회원 매핑: todo_member 테이블에 새로운 할일과 회원의 매핑 정보 추가
     await pool.query(
       `
       INSERT INTO todo_member (member_id, todo_id) VALUES (
-        (SELECT id FROM member WHERE name = ?),
-        ?
+        (SELECT id FROM member WHERE name = $1),
+        $2
       );
       `,
       [username, todoId]
     );
 
     // 생성된 할일 정보 조회
-    const [[justCreatedTodoRow]] = await pool.query(
+    const { rows: justCreatedTodoRow } = await pool.query(
       `
       SELECT *
       FROM todo
-      WHERE id = ?
+      WHERE id = $1;
       `,
       [todoId]
     );
@@ -213,8 +248,8 @@ app.post("/:username/todos/", async (req, res) => {
     // 성공 응답
     res.json({
       resultCode: "S-1",
-      msg: `${justCreatedTodoRow.id}번 할일을 생성하였습니다`,
-      data: justCreatedTodoRow,
+      msg: `${justCreatedTodoRow[0].id}번 할일을 생성하였습니다`,
+      data: justCreatedTodoRow[0],
     });
   } catch (error) {
     console.error("에러 발생:", error);
@@ -227,24 +262,19 @@ app.post("/:username/todos/", async (req, res) => {
   }
 });
 
-
-
-
-   // 할일 수정 API
+// 할일 수정 API
 app.patch("/:username/todos/:no", async (req, res) => {
-  const { username, no } = req.params;
-  const { contents, completed } = req.body;
-
   try {
+  const { username, no } = req.params; 
     // 해당 회원이 작성한 특정 번호의 할일을 조회
-    const [rows] = await pool.query(
+    const { rows } = await pool.query(
       `
       SELECT todo.id
       FROM member
       JOIN todo_member ON member.id = todo_member.member_id
       JOIN todo ON todo_member.todo_id = todo.id
-      WHERE member.name = ?
-        AND todo.id = ?
+      WHERE member.name = $1
+        AND todo.id = $2;
       `,
       [username, no]
     );
@@ -256,46 +286,90 @@ app.patch("/:username/todos/:no", async (req, res) => {
       });
       return;
     }
-
-    // 할일 내용이 없는 경우 실패 응답
-    if (!contents) {
-      res.status(400).json({
-        resultCode: "F-1",
-        msg: "할일 내용을 작성해주세요",
-      });
-      return;
-    }
-
-    // 완료 여부가 정의되지 않은 경우 실패 응답
-    if (typeof completed === 'undefined') {
-      res.status(400).json({
-        resultCode: "F-1",
-        msg: "완료 여부를 지정해주세요",
-      });
-      return;
-    }
+    const { completed } = req.body;
 
     // 할일 수정 쿼리 실행
-    const [rs] = await pool.query(
+    await pool.query(
       ` 
       UPDATE todo
       SET 
-      contents = ?,
-      completed = ?
-      WHERE id = ? 
+      completed = $1
+      WHERE id = $2;
       `,
-      [contents, completed, no]
+      [completed, no]
     );
 
-    res.status(201).json({
+    res.json({
+      resultCode: "S-3",
+      msg: "수정성공",
+      data: rows[0],
+  });
+} catch (error) {
+  console.error(error);
+  res.status(500).json({
+      resultCode: "F-1",
+      msg: "에러 발생",
+  });
+}
+});
+
+// 할일 삭제 API
+app.delete("/:username/todos/:no", async (req, res) => {
+  try { 
+  const { username, no } = req.params;
+
+  const { rows } = await pool.query(
+    `
+    SELECT todo.id
+    FROM member
+    JOIN todo_member ON member.id = todo_member.member_id
+    JOIN todo ON todo_member.todo_id = todo.id
+    WHERE member.name = $1
+      AND todo.id = $2;
+    `,
+    [username, no]
+  );
+
+  if (rows.length === 0) {
+    res.status(404).json({
+      resultCode: "F-1",
+      msg: "해당 회원이 작성한 해당 번호의 할일이 존재하지 않습니다",
+    });
+    return;
+  }
+
+    await pool.query(
+      ` 
+      DELETE FROM todo
+      WHERE id = $1
+        AND id IN (
+          SELECT todo_id
+          FROM todo_member
+          WHERE member_id = (
+            SELECT id
+            FROM member
+            WHERE name = $2
+          )
+        );
+      `,
+      [no, username]
+    );
+
+    if (rows.length === 0) {
+      res.status(400).json({
+        resultCode: "F-1",
+        msg: "해당 todo는 존재하지 않습니다",
+      });
+      return;
+    }
+
+    res.status(200).json({
       resultCode: "S-1",
-      msg: "할일을 수정하였습니다",
-      data: rs,
+      msg: `${no}번 할일을 삭제하였습니다`,
+      data: rows[0],
     });
   } catch (error) {
     console.error("에러 발생:", error);
-
-    // 실패 응답
     res.status(500).json({
       resultCode: "F-1",
       msg: "서버 에러",
@@ -303,45 +377,6 @@ app.patch("/:username/todos/:no", async (req, res) => {
   }
 });
 
-
-
-
-//할일 삭제 API
-app.delete("/:username/todos/:no", async (req, res) => {
-  const { username , no} = req.params;  
-
-  const [todorows] = await pool.query(
-    ` 
-    DELETE FROM todo
-    WHERE id = ?
-      AND id IN (
-        SELECT todo_id
-        FROM todo_member
-        WHERE member_id = (
-          SELECT id
-          FROM member
-          WHERE name = ?
-          )
-      )
-    `,  
-    [no,username]
-  );
-  if (todorows.length == 0) {
-    res.status(400).json({
-      resultCode: "F-1",
-      msg: "해당 todo는 존재하지 않습니다",
-    });
-    return;
-  }
-
-  
-
-  res.status(200).json({
-    resultCode: "F-1",
-    msg: `${no}번 할일을 삭제하였습니다`,
-  });
-});
-
 app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`)
-})
+  console.log(`Example app listening on port ${port}`);
+});
