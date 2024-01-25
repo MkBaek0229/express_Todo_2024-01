@@ -39,7 +39,7 @@ const generateToken = (userId) => {
 
 
 app.get("/", (req, res) => {
-  res.send("Hello Todo World");
+  res.send("Hello Token World");
 });
 
 // 회원가입 API
