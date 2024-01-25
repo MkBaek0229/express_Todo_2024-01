@@ -4,11 +4,11 @@ import pkg from 'pg';
 // import jwt from 'jsonwebtoken';
 
 const { Pool } = pkg;
-//mktodo.internal
+
 const pool = new Pool({
   user: "postgres",
   password: "QQmIjV5pH0QXG6u",
-  host: "127.0.0.1",
+  host: "mktodo.internal",
   port: 5432, // PostgreSQL 기본 포트
   database: "postgres", 
 });
