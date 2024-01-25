@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import pkg from 'pg';
-// import jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 
 const { Pool } = pkg;
 
@@ -158,8 +158,8 @@ app.post("/login", async (req, res) => {
     }
 
     // 로그인 성공 시
-    // const userId = rows[0].id;
-    // const token = generateToken(userId); // 토큰 생성 함수 호출
+    const userId = rows[0].id;
+    const token = generateToken(userId); // 토큰 생성 함수 호출
 
     res.json({
       resultCode: "S-1",
@@ -167,7 +167,7 @@ app.post("/login", async (req, res) => {
       data: {
         userId,
         username,
-        // token,
+        token,
       },
     });
   } catch (error) {
