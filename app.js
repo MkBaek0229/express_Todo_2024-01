@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import pkg from 'pg';
-import jwt from 'jsonwebtoken';
+//import jwt from 'jsonwebtoken';
 
 const { Pool } = pkg;
 
@@ -31,11 +31,11 @@ pool.connect((err) => {
   }
 });
 
-const generateToken = (userId) => {
-  // JWT 생성
-  const token = jwt.sign({ userId }, 'your-secret-key', { expiresIn: '1h' });
-  return token;
-};
+// const generateToken = (userId) => {
+//   // JWT 생성 
+//   const token = jwt.sign({ userId }, 'your-secret-key', { expiresIn: '1h' });
+//   return token;
+// };
 
 
 app.get("/", (req, res) => {
@@ -131,7 +131,7 @@ app.post("/login", async (req, res) => {
   // 필수 정보 검증
   if (!username || !password) {
     res.status(400).json({
-      resultCode: "F-1",
+      resultCode: "F-1", 
       msg: "사용자 이름과 비밀번호를 모두 입력해주세요",
     });
     return;
@@ -157,9 +157,9 @@ app.post("/login", async (req, res) => {
       return;
     }
 
-    // 로그인 성공 시
-    const userId = rows[0].id;
-    const token = generateToken(userId); // 토큰 생성 함수 호출
+    // // 로그인 성공 시
+    // const userId = rows[0].id;
+    // const token = generateToken(userId); // 토큰 생성 함수 호출
 
     res.json({
       resultCode: "S-1",
@@ -167,7 +167,7 @@ app.post("/login", async (req, res) => {
       data: {
         userId,
         username,
-        token,
+        //token,
       },
     });
   } catch (error) {
