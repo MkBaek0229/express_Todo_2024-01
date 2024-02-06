@@ -39,7 +39,7 @@ return token;
 
 
 app.get("/", (req, res) => {
-  res.send("new token world");
+  res.send("new tokene world");
 });
 
 // 회원가입 API
